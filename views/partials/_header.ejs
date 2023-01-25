@@ -19,7 +19,7 @@
       </div>
     </div>
     <% if(username) { %>
-      <h2>Welcome <%= username %></h2>
+      <h2>Logged in as: <%= username %></h2>
       <form method = "POST" action = "/logout">
         <button style = "
         color: white;
@@ -30,7 +30,7 @@
         width: 100px;
         height: 40px;
       "
-      type = "Submit" >Logout</button>
+      type = "Submit" > Logout </button>
       </form>
     <% } else { %>
       <form method = "POST" action = "/login">
