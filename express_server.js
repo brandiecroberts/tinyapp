@@ -41,6 +41,11 @@ app.get("/urls", (req, res) => {
 
 app.get("/urls/new", (req, res) => {
   const userID = req.cookies['userID'];
+
+  if (!userID) {
+    res.redirect("/login");
+  }
+
   const templateVars = {userID};
   res.render("urls_new", templateVars);
 });
@@ -58,6 +63,9 @@ app.get("/urls/:id", (req, res) => {
 
 app.get("/u/:id", (req, res) => {
   const longURL = urlDatabase[req.params.id];
+  if (!longURL) {
+    res.status(400).send("Shortened url does not exist");
+  }
   res.redirect(longURL);
 });
 
@@ -89,7 +97,7 @@ const users = {
     password: "test",
   },
 };
-
+//Posts
 app.post('/register', (req, res) => {
   const email = req.body.email;
   const password = req.body.password;
@@ -121,6 +129,12 @@ app.post("/urls", (req, res) => {
   const value = req.body.longURL;
   const key = generateRandomString();
   urlDatabase[key] = value;
+  
+  const userID = req.cookies['userID'];
+  
+  if (!userID) {
+    return res.status(400).send("Need to be logged in to create new urls");
+  }
   res.redirect(`/urls/${key}`);
 });
 
