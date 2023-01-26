@@ -13,10 +13,13 @@
 
   <body>
     <%- include('partials/_header') %>
+    <% if (typeof userID === 'undefined') { %>
+      <h3><%= error %></h3>
+    <% } else { %>
     <div class="card text-center">
       <div class="card-header"></div>
       <div class="card-body">
-        <h5 class="card-title">TinyURL for: <%= longURL %></h5>
+        <h5 class="card-title">TinyURL for: <%= longURL.longURL %></h5>
         <p class="card-text">
           Short URL ID: <a href="/u/<%= id %>"><%= id %></a>
         </p>
@@ -44,6 +47,7 @@
         </form>
       </div>
     </div>
+    <% } %>
     <!-- Bootstrap JS -->
     <script
       src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
