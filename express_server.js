@@ -1,5 +1,7 @@
 const express = require("express");
 const cookieParser = require('cookie-parser');
+const bcrypt = require('bcryptjs');
+
 const app = express();
 const PORT = 8080; // default port 8080
 
@@ -41,17 +43,17 @@ app.get("/hello", (req, res) => {
 
 app.get("/urls", (req, res) => {
   const userID = req.cookies['userID'];
-  console.log(userID);
+  // console.log(userID);
   
   if (!userID) {
     return res.status(400).render('urls_index');
   }
-/**
+  /**
  * Filter URLs by user
  *
  * @param {string} userID
  * @param {object} urlDatabase
- * 
+ *
  * @return {object} URLs
  */
   const urlsForUser = function(userID, urlDatabase) {
@@ -132,11 +134,6 @@ const users = {
     email: "user2@example.com",
     password: "dishwasher-funk",
   },
-  test: {
-    id: "test",
-    email: "test@test.com",
-    password: "test",
-  },
 };
 
 //POST
@@ -157,9 +154,10 @@ app.post('/register', (req, res) => {
   const newID = {
     id,
     email,
-    password
+    password: bcrypt.hashSync(password, 10)
   };
   users[id] = newID;
+  // console.log(bcrypt.hashSync(password, 10));
 
   res.cookie('userID', users[id]);
   console.log(users[id]);
@@ -206,21 +204,26 @@ app.post("/login", (req, res) => {
   // console.log(req.body);
   const email = req.body.email;
   const password = req.body.password;
-
+  //1. Checking for the Password and Email null values
   if (!email || !password) {
     return res.status(400).send("You need to enter an email and password");
   }
-  
+  //2. We are checking the email and password hashed within the DB and the email and password
+  //supplied by the user
   for (const singleUser in users) {
     const user = users[singleUser];
-    
-    if (user.email === email && password === user.password) {
-      res.cookie("userID", user.id);
-      res.redirect("/urls");
-      return;
+  
+    if (user.email === email) {
+      if (bcrypt.compareSync(password, user.password)) {
+        //This means that user email and the hashed password matched
+        res.cookie("userID", user.id);
+        res.redirect("/urls");
+        return;
+      } else {
+        return res.status(403).send("Email cannot be found or password is incorrect");
+      }
     }
   }
-  return res.status(403).send("Email cannot be found or password is incorrect");
 });
 
 app.post("/logout", (req, res) => {
