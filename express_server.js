@@ -1,12 +1,17 @@
 const express = require("express");
-const cookieParser = require('cookie-parser');
+const cookieSession = require('cookie-session');
 const bcrypt = require('bcryptjs');
+const {getUserByEmail} = require('./helpers');
 
 const app = express();
-const PORT = 8080; // default port 8080
+const PORT = 8080;
 
-//middleware
-app.use(cookieParser());
+//Middleware
+app.use(cookieSession(({
+  name: 'session',
+  keys: ['']
+}))
+);
 app.use(express.urlencoded({ extended: true }));
 
 app.set("view engine", "ejs");
@@ -42,7 +47,7 @@ app.get("/hello", (req, res) => {
 });
 
 app.get("/urls", (req, res) => {
-  const userID = req.cookies['userID'];
+  const userID = req.session.userID;
   // console.log(userID);
   
   if (!userID) {
@@ -75,7 +80,7 @@ app.get("/urls", (req, res) => {
 });
 
 app.get("/urls/new", (req, res) => {
-  const userID = req.cookies['userID'];
+  const userID = req.session.userID;
 
   if (!userID) {
     res.redirect("/login");
@@ -87,7 +92,7 @@ app.get("/urls/new", (req, res) => {
 
 app.get("/urls/:id", (req, res) => {
   const shortURL = req.params.id;
-  const userID = req.cookies['userID'];
+  const userID = req.session.userID;
  
   if (!userID) {
     return res.status(400).render('urls_show', {error: "Need to be logged in"});
@@ -107,9 +112,9 @@ app.get("/urls/:id", (req, res) => {
 app.get("/u/:id", (req, res) => {
   const longURL = urlDatabase[req.params.id];
   if (!longURL) {
-    res.status(400).send("Shortened url does not exist");
+    return res.status(400).send("Shortened url does not exist");
   }
-  res.redirect(longURL);
+  res.redirect(longURL.longURL);
 });
 
 app.get("/register", (req, res) => {
@@ -144,12 +149,12 @@ app.post('/register', (req, res) => {
   if (!email || !password) {
     return res.status(400).send("You need to enter an email and password");
   }
-  for (const singleUser in users) {
-    const user = users[singleUser];
-    if (user.email === email) {
-      return res.status(400).send("Email already in use");
-    }
+ 
+  const user = getUserByEmail(email, users);
+  if (user) {
+    return res.status(400).send("Email already in use");
   }
+
   const id = Math.random().toString(36).substring(2, 6);
   const newID = {
     id,
@@ -159,14 +164,15 @@ app.post('/register', (req, res) => {
   users[id] = newID;
   // console.log(bcrypt.hashSync(password, 10));
 
-  res.cookie('userID', users[id]);
+  // res.cookie('userID', users[id]);
+  req.session.userID = users[id];
   console.log(users[id]);
   res.redirect("/urls");
 });
 
 app.post("/urls", (req, res) => {
   // console.log(req.body);
-  const userID = req.cookies['userID'];
+  const userID = req.session.userID;
   if (!userID) {
     return res.status(400).send("Need to be logged in to create new urls");
   }
@@ -179,7 +185,7 @@ app.post("/urls", (req, res) => {
 
 app.post("/urls/:id/delete", (req, res) => {
   // console.log(req.body);
-  const userID = req.cookies['userID'];
+  const userID = req.session.userID;
   if (!userID) {
     return res.status(400).send("Need to be logged in to delete urls");
   }
@@ -190,7 +196,7 @@ app.post("/urls/:id/delete", (req, res) => {
 
 app.post("/urls/:id", (req, res) => {
   // console.log(req.body);
-  const userID = req.cookies['userID'];
+  const userID = req.session.userID;
   if (!userID) {
     return res.status(400).send("Need to be logged in to edit urls");
   }
@@ -210,20 +216,24 @@ app.post("/login", (req, res) => {
   }
   //2. We are checking the email and password hashed within the DB and the email and password
   //supplied by the user
-  for (const singleUser in users) {
-    const user = users[singleUser];
-  
-    if (user.email === email) {
-      if (bcrypt.compareSync(password, user.password)) {
-        //This means that user email and the hashed password matched
-        res.cookie("userID", user.id);
-        res.redirect("/urls");
-        return;
-      } else {
-        return res.status(403).send("Email cannot be found or password is incorrect");
-      }
-    }
+  const user = getUserByEmail(email, users);
+  if (!user) {
+    return res.status(403).send("Email does not match");
   }
+  if (bcrypt.compareSync(password, user.password)) {
+    //This means that user email and the hashed password matched
+    // res.cookie("userID", user.id);
+    req.session.userID = user.id;
+    console.log(req.session.userID);
+    res.redirect("/urls");
+    return;
+  } else {
+    return res.status(403).send("Email cannot be found or password is incorrect");
+  }
+  // for (const singleUser in users) {
+  // const user = users[singleUser];
+  
+  // }
 });
 
 app.post("/logout", (req, res) => {
@@ -231,6 +241,7 @@ app.post("/logout", (req, res) => {
   res.redirect("/login");
 });
 
+//Generating random string
 const generateRandomString = function() {
   // const id = Math.random().toString(36).substring(2, 6);
   // console.log(generateRandomString[id]);
