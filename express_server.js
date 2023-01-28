@@ -1,7 +1,7 @@
 const express = require("express");
 const cookieSession = require('cookie-session');
 const bcrypt = require('bcryptjs');
-const {getUserByEmail} = require('./helpers');
+const {getUserByEmail, generateRandomString, urlsForUser} = require('./helpers');
 
 const app = express();
 const PORT = 8080;
@@ -16,9 +16,6 @@ app.use(express.urlencoded({ extended: true }));
 
 app.set("view engine", "ejs");
 
-app.listen(PORT, () => {
-  console.log(`Example app listening on port ${PORT}!`);
-});
 
 //URL Database
 const urlDatabase = {
@@ -29,6 +26,20 @@ const urlDatabase = {
   i3BoGr: {
     longURL: "https://www.google.ca",
     userID: "aJ48lW",
+  },
+};
+
+//Login/Logout Database
+const users = {
+  userRandomID: {
+    id: "userRandomID",
+    email: "user@example.com",
+    password: "purple-monkey-dinosaur",
+  },
+  user2RandomID: {
+    id: "user2RandomID",
+    email: "user2@example.com",
+    password: "dishwasher-funk",
   },
 };
 
@@ -48,29 +59,10 @@ app.get("/hello", (req, res) => {
 
 app.get("/urls", (req, res) => {
   const userID = req.session.userID;
-  // console.log(userID);
   
   if (!userID) {
     return res.status(400).render('urls_index');
   }
-  /**
- * Filter URLs by user
- *
- * @param {string} userID
- * @param {object} urlDatabase
- *
- * @return {object} URLs
- */
-  const urlsForUser = function(userID, urlDatabase) {
-    const urls = {};
-    for (let url in urlDatabase) {
-      if (userID === urlDatabase[url].userID) {
-        urls[url] = urlDatabase[url];
-      }
-    }
-
-    return urls;
-  };
 
   const templateVars = {
     urls: urlsForUser(userID, urlDatabase),
@@ -94,6 +86,7 @@ app.get("/urls/:id", (req, res) => {
   const shortURL = req.params.id;
   const userID = req.session.userID;
  
+  //Checking if user is logged in; if not they are not able to view URL
   if (!userID) {
     return res.status(400).render('urls_show', {error: "Need to be logged in"});
   } else if (userID !== urlDatabase[shortURL].userID) {
@@ -127,34 +120,23 @@ app.get("/login", (req, res) => {
 });
 
 
-//Login/Logout Database
-const users = {
-  userRandomID: {
-    id: "userRandomID",
-    email: "user@example.com",
-    password: "purple-monkey-dinosaur",
-  },
-  user2RandomID: {
-    id: "user2RandomID",
-    email: "user2@example.com",
-    password: "dishwasher-funk",
-  },
-};
-
 //POST
 app.post('/register', (req, res) => {
   const email = req.body.email;
   const password = req.body.password;
 
+  //If there is no email or password entered; return an error message
   if (!email || !password) {
     return res.status(400).send("You need to enter an email and password");
   }
  
+  //If the email is already registered; return an error message
   const user = getUserByEmail(email, users);
   if (user) {
     return res.status(400).send("Email already in use");
   }
 
+  //Generates a random ID when registering a new account & hashes the password
   const id = Math.random().toString(36).substring(2, 6);
   const newID = {
     id,
@@ -162,16 +144,15 @@ app.post('/register', (req, res) => {
     password: bcrypt.hashSync(password, 10)
   };
   users[id] = newID;
-  // console.log(bcrypt.hashSync(password, 10));
+  
+  //Keeps user logged in after succesfully registering
+  res.cookie('userID', newID.id);
+  req.session.userID = newID.id;
 
-  // res.cookie('userID', users[id]);
-  req.session.userID = users[id];
-  console.log(users[id]);
   res.redirect("/urls");
 });
 
 app.post("/urls", (req, res) => {
-  // console.log(req.body);
   const userID = req.session.userID;
   if (!userID) {
     return res.status(400).send("Need to be logged in to create new urls");
@@ -184,8 +165,9 @@ app.post("/urls", (req, res) => {
 });
 
 app.post("/urls/:id/delete", (req, res) => {
-  // console.log(req.body);
   const userID = req.session.userID;
+
+  //If userID does not match, user needs to log in to delete urls
   if (!userID) {
     return res.status(400).send("Need to be logged in to delete urls");
   }
@@ -195,7 +177,7 @@ app.post("/urls/:id/delete", (req, res) => {
 });
 
 app.post("/urls/:id", (req, res) => {
-  // console.log(req.body);
+  
   const userID = req.session.userID;
   if (!userID) {
     return res.status(400).send("Need to be logged in to edit urls");
@@ -207,9 +189,9 @@ app.post("/urls/:id", (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  // console.log(req.body);
   const email = req.body.email;
   const password = req.body.password;
+
   //1. Checking for the Password and Email null values
   if (!email || !password) {
     return res.status(400).send("You need to enter an email and password");
@@ -218,22 +200,16 @@ app.post("/login", (req, res) => {
   //supplied by the user
   const user = getUserByEmail(email, users);
   if (!user) {
-    return res.status(403).send("Email does not match");
+    return res.status(403).send("Email/password does not match, or you need to register new account");
   }
   if (bcrypt.compareSync(password, user.password)) {
-    //This means that user email and the hashed password matched
-    // res.cookie("userID", user.id);
+    res.cookie("userID", user.id);
     req.session.userID = user.id;
-    console.log(req.session.userID);
     res.redirect("/urls");
     return;
   } else {
     return res.status(403).send("Email cannot be found or password is incorrect");
   }
-  // for (const singleUser in users) {
-  // const user = users[singleUser];
-  
-  // }
 });
 
 app.post("/logout", (req, res) => {
@@ -241,15 +217,7 @@ app.post("/logout", (req, res) => {
   res.redirect("/login");
 });
 
-//Generating random string
-const generateRandomString = function() {
-  // const id = Math.random().toString(36).substring(2, 6);
-  // console.log(generateRandomString[id]);
-  let result = "";
-  const len = 6;
-  const chars =
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  for (let i = len; i > 0; --i)
-    result += chars[Math.floor(Math.random() * chars.length)];
-  return result;
-};
+
+app.listen(PORT, () => {
+  console.log(`Example app listening on port ${PORT}!`);
+});
