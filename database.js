@@ -10,7 +10,7 @@ const urlDatabase = {
   },
 };
 
-//Login/Logout Database
+//Users Database
 const users = {
   userRandomID: {
     id: "userRandomID",
