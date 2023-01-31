@@ -2,6 +2,7 @@ const express = require("express");
 const cookieSession = require('cookie-session');
 const bcrypt = require('bcryptjs');
 const {getUserByEmail, generateRandomString, urlsForUser} = require('./helpers');
+const {urlDatabase, users} = require('./database');
 
 const app = express();
 const PORT = 8080;
@@ -9,7 +10,7 @@ const PORT = 8080;
 //Middleware
 app.use(cookieSession(({
   name: 'session',
-  keys: ['']
+  keys: ['abcdefghijklmnop']
 }))
 );
 app.use(express.urlencoded({ extended: true }));
@@ -17,31 +18,31 @@ app.use(express.urlencoded({ extended: true }));
 app.set("view engine", "ejs");
 
 
-//URL Database
-const urlDatabase = {
-  b6UTxQ: {
-    longURL: "https://www.tsn.ca",
-    userID: "aJ48lW",
-  },
-  i3BoGr: {
-    longURL: "https://www.google.ca",
-    userID: "aJ48lW",
-  },
-};
+// //URL Database
+// const urlDatabase = {
+//   b6UTxQ: {
+//     longURL: "https://www.tsn.ca",
+//     userID: "aJ48lW",
+//   },
+//   i3BoGr: {
+//     longURL: "https://www.google.ca",
+//     userID: "aJ48lW",
+//   },
+// };
 
-//Login/Logout Database
-const users = {
-  userRandomID: {
-    id: "userRandomID",
-    email: "user@example.com",
-    password: "purple-monkey-dinosaur",
-  },
-  user2RandomID: {
-    id: "user2RandomID",
-    email: "user2@example.com",
-    password: "dishwasher-funk",
-  },
-};
+// //Login/Logout Database
+// const users = {
+//   userRandomID: {
+//     id: "userRandomID",
+//     email: "user@example.com",
+//     password: "purple-monkey-dinosaur",
+//   },
+//   user2RandomID: {
+//     id: "user2RandomID",
+//     email: "user2@example.com",
+//     password: "dishwasher-funk",
+//   },
+// };
 
 
 //GET
@@ -51,10 +52,6 @@ app.get("/", (req, res) => {
 
 app.get("/urls.json", (req, res) => {
   res.json(urlDatabase);
-});
-
-app.get("/hello", (req, res) => {
-  res.send("<html><body>Hello <b>World</b></body></html>\n");
 });
 
 app.get("/urls", (req, res) => {
@@ -75,7 +72,7 @@ app.get("/urls/new", (req, res) => {
   const userID = req.session.userID;
 
   if (!userID) {
-    res.redirect("/login");
+    return res.redirect("/login");
   }
 
   const templateVars = {userID};
@@ -166,23 +163,33 @@ app.post("/urls", (req, res) => {
 
 app.post("/urls/:id/delete", (req, res) => {
   const userID = req.session.userID;
+  const deleteKey = req.params.id;
 
   //If userID does not match, user needs to log in to delete urls
   if (!userID) {
-    return res.status(400).send("Need to be logged in to delete urls");
+    return res.status(400).send("Need to be logged in");
   }
-  const deleteKey = req.params.id;
+  //If userID does not match the user who created the URL, they cannot delete the URL
+  if (urlDatabase[deleteKey].userID !== userID) {
+    return res.status(400).send('You do not have permission to delete URL');
+  }
+
   delete urlDatabase[deleteKey];
   res.redirect("/urls");
 });
 
 app.post("/urls/:id", (req, res) => {
-  
   const userID = req.session.userID;
-  if (!userID) {
-    return res.status(400).send("Need to be logged in to edit urls");
-  }
   const id = req.params.id;
+
+  if (!userID) {
+    return res.status(400).send("Need to be logged in");
+  }
+  //If userID does not match the userID who created the URL, it cannot be viewed
+  if (urlDatabase[id].userID !== userID) {
+    return res.status(400).send('You do not have permission to view this URL');
+  }
+
   urlDatabase[id].longURL = req.body.longUrl;
 
   res.redirect("/urls");
@@ -214,6 +221,7 @@ app.post("/login", (req, res) => {
 
 app.post("/logout", (req, res) => {
   res.clearCookie("userID");
+  req.session = null;
   res.redirect("/login");
 });
 
